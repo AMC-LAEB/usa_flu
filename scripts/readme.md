@@ -2,7 +2,7 @@
 
 **phydelity_usa.py** corresponds to the modified version of Phydelity (https://github.com/alvinxhan/Phydelity) used to cluster phylogenies.
 
-**runPhydelity.py is the script used to run Phydelity on the season-specific trees.
+**runPhydelity.py** is the script used to run Phydelity on the season-specific trees.
 
 **plotFunctions.R** contains auxiliary plotting functions.
 
