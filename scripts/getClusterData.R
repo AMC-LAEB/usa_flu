@@ -1,13 +1,3 @@
-library(stringr)
-library(sleekts)
-library(ape)
-
-setwd("/Users/simondejong/US_phylo")
-
-
-clusterpath = "time_0.083_pct_0.1_2"
-
-
 get_incidence_data <- function(plot=F){
   
   # Read ILI data
@@ -102,39 +92,69 @@ get_incidence_data <- function(plot=F){
   return(ili)
 }
 
-# Get incidebce data
-ili = get_incidence_data()
+getOnsetCountry <- function(subtype,season){
+  column = c("A..2009.H1N1.",'A..H3.','BYam','BVic')[match(subtype,c("H1N1","H3N2","Yam","Vic"))]
+  if (season > 2014){
+    ssns = c(2015:2019,2022)
+    isolates = read.csv("data/US_PH_labs.csv")
+  } else {
+    if (subtype %in% c("Yam","Vic")){return(NA)}
+    ssns = c(2014)
+    isolates = read.csv("data/National_pre2015.csv")
+  }
+  isolates$Date = NA
+  for (year in unique(isolates$YEAR)){
+    isolates[isolates$YEAR==year,]$Date = year + isolates[isolates$YEAR==year,]$WEEK/max(isolates[isolates$YEAR==year,]$WEEK)
+  }
+  isolates$Season = NA
+  for (i in c(ssns)){
+    isolates[isolates$Date>i+0.5 & isolates$Date<i+1.5,]$Season = i
+  }
+  islts = isolates[isolates$Season==season,]
+  islts = islts[complete.cases(islts),]
+  
+  onset_idx = which(cumsum(islts[,column])>0.05*sum(islts[,column]))[1]
+  wk = islts[onset_idx,]$Date
+  return(wk)
+} 
+# Get incidence data
+
+computeSequenceRepresentativeness <- function(){
+  dat = read.csv("data/WHO_NREVSS_Public_Health_Labs.csv")
+  for (i in 4:ncol(dat)){dat[,i] = as.numeric(dat[,i])}
+  dat$PropH3 = dat$A..H3. / (dat$A..H3. + dat$A..2009.H1N1.)
+  dat$PropH1 = dat$A..2009.H1N1. / (dat$A..H3. + dat$A..2009.H1N1.)#(dat$TOTAL.SPECIMENS)
+  dat$PropVic  = dat$BVic / (dat$BVic+dat$BYam)#(dat$TOTAL.SPECIMENS)
+  dat$PropYam = dat$BYam / (dat$BVic+dat$BYam)
+  dat$Season = as.numeric(substr(dat$SEASON_DESCRIPTION,8,11))
+  dat = dat[!(dat$Season%in%c(2020,2021,2023)),]
+  dat$PropH3_seq = NA
+  dat$PropH1_seq = NA
+  dat$PropVic_seq = NA
+  dat$PropYam_seq = NA
+  
+  inc_by_subtype = aggregate(Percentage_Incidence~Season+State+Subtype,data=cluster_df,FUN=sum)
+  for (i in 1:nrow(dat)){
+    counts = sapply(c("H3N2","H1N1","Vic","Yam"),function(x)
+      ifelse(length(inc_by_subtype[inc_by_subtype$Season==dat[i,]$Season & inc_by_subtype$State==dat[i,]$REGION & inc_by_subtype$Subtype==x,]$Percentage_Incidence)>0,
+             inc_by_subtype[inc_by_subtype$Season==dat[i,]$Season & inc_by_subtype$State==dat[i,]$REGION & inc_by_subtype$Subtype==x,]$Percentage_Incidence,
+             0))
+    
+    props[1:2] = counts[1:2]/sum(counts[1:2])
+    props[3:4] = counts[3:4]/sum(counts[3:4])
+    dat[i,17:20] = props
+  }
+  
+  cor.test(dat$PropYam_seq,dat$PropYam)
+  cor.test(dat$PropH3_seq,dat$PropH3)
+  }
 
 
-getClusterData_subsamp <- function(clusterpath){
-  
-  # # Read sequence metadata files
-  # # 
-  # mtdt = setNames(cbind("H3N2",read.csv("metadata/H3N2_mt.csv")),c("Subtype","Strain","Date"))
-  # mtdt = rbind(mtdt,setNames(cbind("H1N1",read.csv("metadata/H1N1_mt.csv")),c("Subtype","Strain","Date")))
-  # mtdt = rbind(mtdt,setNames(cbind("Yam",read.csv("metadata/Yam_mt.csv")),c("Subtype","Strain","Date")))
-  # mtdt = rbind(mtdt,setNames(cbind("Vic",read.csv("metadata/Vic_mt.csv")),c("Subtype","Strain","Date")))
-  # 
-  # mtdt$Season = NA
-  # for (i in 2013:2023){
-  #   mtdt[mtdt$Date > i + 0.5 & mtdt$Date < i + 1.5,]$Season = i
-  # }
-  # 
-  # mtdt$Week = ceiling((mtdt$Date-floor(mtdt$Date))*52)
-  # mtdt$Week[mtdt$Week==0] = 1
-  # 
-  # mtdt$State = gsub("_"," ",str_match(mtdt$Strain, "/\\s*(.*?)\\s*/")[,2])
-  # mtdt[mtdt$State=="PENNSYLVANIA",]$State = "Pennsylvania"
-  # 
-  # mtdt$EpiWeek = ili$EpiWeek[match(paste0(mtdt$Season,mtdt$Week),paste0(ili$Season,ili$Week))]
-  # 
-  # mtdt_all = mtdt
-  # 
-  # nrow(mtdt[!(mtdt$State%in%c("Alaska","Hawaii")),])
-  
-  mtdt = read.csv("subsampled_mtdt.tsv")
+getClusterData_subsamp <- function(clusterpath, incidence_thresh){
   
   # Get cluster for each sequence
+  
+  mtdt = read.csv("subsampled_mtdt.tsv")
   
   mtdt$Cluster = "UNCLUSTERED"
   mtdt$File = NA
@@ -155,13 +175,8 @@ getClusterData_subsamp <- function(clusterpath){
     for (clidx_2 in 1:length(clusters_cl)){
       if (nrow(mtdt[mtdt$Season==season&mtdt$Strain%in%file[file$CLUSTER==clusters_cl[clidx_2],]$TAXA,])==0){next}
       
-      ##if (season<2020){
-      #  mtdt[mtdt$Season==season&mtdt$Strain%in%file[file$CLUSTER==clusters_cl[clidx_2],]$TAXA,]$Cluster = idx
-      #  mtdt[mtdt$Season==season&mtdt$Strain%in%file[file$CLUSTER==clusters_cl[clidx_2],]$TAXA,]$File = clusters[clidx]
-      #} else {
-        mtdt[mtdt$Season>=season&mtdt$Strain%in%file[file$CLUSTER==clusters_cl[clidx_2],]$TAXA,]$Cluster = idx
-        mtdt[mtdt$Season>=season&mtdt$Strain%in%file[file$CLUSTER==clusters_cl[clidx_2],]$TAXA,]$File = clusters[clidx]
-     # }
+      mtdt[mtdt$Season>=season&mtdt$Strain%in%file[file$CLUSTER==clusters_cl[clidx_2],]$TAXA,]$Cluster = idx
+      mtdt[mtdt$Season>=season&mtdt$Strain%in%file[file$CLUSTER==clusters_cl[clidx_2],]$TAXA,]$File = clusters[clidx]
         
       mrcA = getMRCA(tree,file[file$CLUSTER==clusters_cl[clidx_2],]$TAXA)
       maxdate = max(mtdt[mtdt$Strain%in%file[file$CLUSTER==clusters_cl[clidx_2],]$TAXA,]$Date)
@@ -259,7 +274,7 @@ getClusterData_subsamp <- function(clusterpath){
         
         total_inc = sum(cluster_incs_fit)
         
-        onsets = apply(cluster_incs_fit,1,function(x)which(cumsum(x)>0.05*total_inc)[1])
+        onsets = apply(cluster_incs_fit,1,function(x)which(cumsum(x)>incidence_thresh*total_inc)[1])
         
         percentages = seqcounts/sum(seqcounts)#apply(cluster_incs_fit,1,sum)/total_inc
         
@@ -267,7 +282,7 @@ getClusterData_subsamp <- function(clusterpath){
         
         subtype = mt$Subtype[match(clusters,mt$Cluster)]
         
-        df = data.frame(Subtype = subtype, State=state,Season=season,Cluster=clusters,Percentage=percentages,Onset=onsets,Seqcount=seqcounts)
+        df = data.frame(Subtype = subtype, State=state,Season=season,Cluster=clusters,Percentage=percentages,Onset=onsets,Seqcount=seqcounts, Percentage_Incidence = percentages_absolute)
         
         for (subtype in subtypes){
           
@@ -351,7 +366,7 @@ getClusterData_subsamp <- function(clusterpath){
   for (season in unique(cluster_df_country$Season)){
     for (subtype in unique(cluster_df_country$Subtype)){
       if (nrow(cluster_df_country[cluster_df_country$Season==season & cluster_df_country$Subtype==subtype,])==0){next}
-      prop = epidemic_compositions[epidemic_compositions$Season==season & epidemic_compositions$Subtype==subtype,]$Prop
+      prop = epidemic_compositions[epidemic_compositions$Season==season & epidemic_compositions$Subtype==c("A/H3N2","A/H1N1pdm09","B/Yam","B/Vic")[match(subtype,c("H3N2","H1N1","Yam","Vic"))],]$Prop
       cluster_df_country[cluster_df_country$Season==season & cluster_df_country$Subtype==subtype,]$Percentage_Season = 
         cluster_df_country[cluster_df_country$Season==season & cluster_df_country$Subtype==subtype,]$Percentage * prop
       if (prop > 0.1){
@@ -371,33 +386,7 @@ getClusterData_subsamp <- function(clusterpath){
     cluster_df_country[i,]$TMRCA = tmrca
   }
   
-  
-  getOnsetCountry <- function(subtype,season){
-    column = c("A..2009.H1N1.",'A..H3.','BYam','BVic')[match(subtype,c("H1N1","H3N2","Yam","Vic"))]
-    if (season > 2014){
-      ssns = c(2015:2019,2022)
-      isolates = read.csv("data/US_PH_labs.csv")
-    } else {
-      if (subtype %in% c("Yam","Vic")){return(NA)}
-      ssns = c(2014)
-      isolates = read.csv("data/National_pre2015.csv")
-    }
-    isolates$Date = NA
-    for (year in unique(isolates$YEAR)){
-      isolates[isolates$YEAR==year,]$Date = year + isolates[isolates$YEAR==year,]$WEEK/max(isolates[isolates$YEAR==year,]$WEEK)
-    }
-    isolates$Season = NA
-    for (i in c(ssns)){
-      isolates[isolates$Date>i+0.5 & isolates$Date<i+1.5,]$Season = i
-    }
-    islts = isolates[isolates$Season==season,]
-    islts = islts[complete.cases(islts),]
-    
-    onset_idx = which(cumsum(islts[,column])>0.05*sum(islts[,column]))[1]
-    wk = islts[onset_idx,]$Date
-    return(wk)
-  } 
-  
+
   cluster_df_country$FirstSamp = sapply(cluster_df_country$Cluster,function(x)min(mtdt[mtdt$Cluster==x,]$Date))
   cluster_df_country$EpidemicOnset = NA
   for (ssn in unique(cluster_df_country$Season)){
@@ -418,15 +407,4 @@ getClusterData_subsamp <- function(clusterpath){
   
   
   return(list(mtdt,cluster_df,cluster_df_country))
-  
 }
-
-
-
-dat = getClusterData_subsamp(clusterpath)
-mtdt = dat[[1]]
-cluster_df = dat[[2]]
-cluster_df_country = dat[[3]]
-
-
-

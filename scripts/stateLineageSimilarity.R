@@ -13,13 +13,10 @@ getSingleDist <- function(season=NA, subtype=NA){
   tokeep = unlist(lapply(states,function(x)length(which(tabulate(findInterval(mtdt[mtdt$State==x,]$Season,c(2014:2019,2022)))<10))<1))
   
   if (!(is.na(season))){
-    mt = mtdt[mtdt$Season==season & mtdt$Subtype==subtype,]# & (cluster_df$Subtype%in%c("H1N1","H3N2")),]
+    mt = mtdt[mtdt$Season==season & mtdt$Subtype==subtype,]
     tokeep = unlist(lapply(states,function(x)nrow(mtdt[mtdt$State==x & mtdt$Season==season & mtdt$Subtype==subtype,])>=10))
     
   }
-  
-  file = file[file$State%in%states,]
-  file=file[!(file$State%in%c("Alaska","Hawaii")),]
   
   dfs = vector(mode='list')
   idx = 1
@@ -27,11 +24,20 @@ getSingleDist <- function(season=NA, subtype=NA){
     sampl = c()
     for (ssn in c(2014:2019,2022)){
       mt_i = mtdt[mtdt$State==i & mtdt$Season==ssn & !(mtdt$Cluster=="UNCLUSTERED"),]
+      if (!(is.na(subtype))){mt_i = mtdt[mtdt$State==i & mtdt$Season==ssn & !(mtdt$Cluster=="UNCLUSTERED") & mtdt$Subtype==subtype,]}
       n = nrow(mt_i)
-      if (n > 20){
-        samp = sample(mt_i$Cluster,20,replace=F)
+      if (is.na(subtype)){
+        if (n > 20){
+          samp = sample(mt_i$Cluster,20,replace=F)
+        } else {
+          samp = mt_i$Cluster
+        }
       } else {
-        samp = mt_i$Cluster
+        if (n > 10){
+          samp = sample(mt_i$Cluster,10,replace=F)
+        } else {
+          samp = mt_i$Cluster
+        }
       }
       sampl = c(sampl,samp)
     }
@@ -39,8 +45,6 @@ getSingleDist <- function(season=NA, subtype=NA){
     dfs[[idx]] = tb
     idx = idx + 1
   }
-  
-  if (length(dfs)<40){return(NA)}
   
   df = do.call(rbind,dfs)
   
@@ -57,22 +61,21 @@ getSingleDist <- function(season=NA, subtype=NA){
   return(m)
 }
 
-getSimMat <- function(){
+getSimMat <- function(subtype=NA,season=NA){
   
-  s = replicate(50,getSingleDist())
+  s = replicate(50,getSingleDist(season,subtype))
   m = apply(s,c(1,2),mean)
-  
   cmd = isoMDS(m)$points
-  
   colnames(cmd) <- c("Dim.1", "Dim.2")
   cmd = as.data.frame(cmd)
   cmd$division = c(state.region[-c(2,11)],"Northeast")[match(rownames(cmd),states)]
+  hhsregions <- c(4,10,9,6,9,8,1,3,4,4,9,10,5,5,7,7,4,6,1,3,1,5,5,4,7,8,7,9,1,2,6,2,4,8,5,6,10,3,1,4,8,4,6,8,1,3,10,3,5,8)
   cmd$hhs = hhsregions[match(rownames(cmd),state.name)]
   cmd$state = rownames(cmd)
   return(list(m,cmd))
 }
 
-plotMDS <- function(cmd){
+plotMDS <- function(cmd,polygon=T){
   cmd$state = rownames(cmd)
   cmd2 = cmd %>% group_by(division) %>% slice(chull(Dim.1,Dim.2))
   
@@ -80,10 +83,13 @@ plotMDS <- function(cmd){
                     label = factor(rownames(cmd)),
                     size = 4,
                     repel = TRUE) + scale_fill_brewer(palette='Set2') + scale_fill_brewer(palette='Set2',labels=c('Northeast','South','Midwest','West'))+
-    thm + geom_text(aes(color=division,label=state.abb[match(state,state.name)]),size=4/.pt) + thm +
-    theme(legend.position='top',legend.direction='horizontal') + geom_polygon(data = cmd2, alpha = 0.2,linewidth=0,aes(fill = factor(division),colour = factor(division))) + 
+    thm + geom_text(aes(color=division,label=state.abb[match(state,state.name)]),size=5/.pt) + thm +
+    theme(legend.position='top',legend.direction='horizontal') + 
     scale_color_brewer(palette='Set2',guide='none')
   
+  if (polygon){
+    mds_plot = mds_plot + geom_polygon(data = cmd2, alpha = 0.2,linewidth=0,aes(fill = factor(division),colour = factor(division))) 
+  }
   return(mds_plot)
 }
 
@@ -110,6 +116,10 @@ plotDistMet <- function(m){
   
   distance_metrics = get_distance_metrics()
   dist_met_dfs = list()
+  
+  if ("District Of Columbia" %in% colnames(m)){
+    m = m[-match("District Of Columbia",colnames(m)),-match("District Of Columbia",colnames(m))]
+  }
   
   for (dist_met in 1:1){
     dm = distance_metrics[[dist_met]]
@@ -156,7 +166,8 @@ plotDistMet <- function(m){
               legend.key=element_rect(fill="white"))
   
   
-  distmet_plot = ggplot(plot_rank_df[plot_rank_df$Metric=="Centroid distance",]) + geom_errorbar(width=1,aes(x=rank,ymin=Lo,ymax=Hi),position=position_dodge(width=1.5),linewidth=0.2) +
+  distmet_plot = ggplot(plot_rank_df[plot_rank_df$Metric=="Centroid distance",]) + 
+    geom_errorbar(width=1,aes(x=rank,ymin=Lo,ymax=Hi),position=position_dodge(width=1.5),linewidth=0.2) +
     thm + xlab("Similarity rank") + ylab("Distance rank") + thm + 
     stat_smooth(aes(x=rank,y=Med),col='black',se=T,linewidth=0.5)
   return(distmet_plot)
@@ -165,7 +176,6 @@ plotDistMet <- function(m){
 getSeasonPValues <- function(){
   
   distance = read.csv("/Users/simondejong/usa/centroid_dists.csv",h=F)
-  
   mantel_test = list()
   idx = 1
   for (i in unique(cluster_df_country$Season)){
@@ -189,4 +199,56 @@ getSeasonPValues <- function(){
   p_values = sapply(mantel_test,function(x)(x$signif))
   return(p_values)
 }
+
+
+plotMDSSingleSeason <- function(){
+  single_season_mds_list = list()
+  idx = 1
+  for (i in 1:nrow(epidemic_compositions)){
+    lst = list()
+    if (epidemic_compositions[i,3]>0.2 & !(epidemic_compositions[i,1]%in%c(2020,2021,2023))){
+      lst$subtype = c("H3N2","H1N1","Yam","Vic")[match(epidemic_compositions[i,2],c("A/H3N2","A/H1N1pdm09","B/Yam","B/Vic"))]
+      lst$season = epidemic_compositions[i,1]
+      lst$df = getSimMat(lst$subtype,lst$season)
+      single_season_mds_list[[idx]] = lst
+      idx = idx + 1
+    }
+  }
+  
+  plotlist = list()
+  for (i in 1:length(single_season_mds_list)){
+    plotlist[[i]] = plotMDS(single_season_mds_list[[i]]$df[[2]],"F") + 
+      ggtitle(paste0(single_season_mds_list[[i]]$season," ",single_season_mds_list[[i]]$subtype)) + 
+      xlab("") + ylab("") + thm +
+      theme(legend.key.height=unit(7,'pt'),
+            legend.key.width=unit(7,'pt'),
+            legend.spacing.x = unit(.1, 'cm'),
+            plot.title=element_text(size=7),
+            legend.text = element_text(size=7))
+    
+  }
+  ggarrange(plotlist=plotlist,nrow=4,ncol=3)
+  ggsave("SuppFig_MDS.pdf",width=2000,height=2000,units='px',dpi=320)
+}
+
+plotSimilarityCor <- function(){
+  plotlist2 = list()
+  for (i in 1:length(single_season_mds_list)){
+    mat = single_season_mds_list[[i]]$df[[1]]
+    colnames(mat) = rownames(single_season_mds_list[[i]]$df[[2]])
+    rownames(mat) = colnames(mat)
+    if ("District Of Columbia" %in% colnames(mat)){
+      mat = mat[-c(match("District Of Columbia",colnames(mat))),-c(match("District Of Columbia",colnames(mat)))]
+    }
+    mantel_test = mantel(mat,log(distance[match(colnames(mat),state.name),match(colnames(mat),state.name)]),method='spearman')
+    
+    plotlist2[[i]] = plotDistMet(single_season_mds_list[[i]]$df[[1]]) +
+      ggtitle(paste0(single_season_mds_list[[i]]$season," ",single_season_mds_list[[i]]$subtype,", r = ",round(mantel_test$statistic,3),", P = ",round(mantel_test$signif,3))) + 
+      theme(plot.title=element_text(size=5)) 
+  }
+  ggarrange(plotlist=plotlist2,nrow=4,ncol=3)
+  ggsave("SuppFig_Cor.pdf",width=1500,height=2000,units='px',dpi=320)
+}
+
+
 

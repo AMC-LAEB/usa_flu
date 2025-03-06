@@ -3,6 +3,8 @@ library(ggplot2)
 library(ggtree)
 library(lubridate)
 library(RColorBrewer)
+library(colorspace)
+library(scales)
 
 plotTree <- function(clusterpath, subtype, year, mtdt,cltoplot=NA,vert=F){
   
@@ -16,7 +18,6 @@ plotTree <- function(clusterpath, subtype, year, mtdt,cltoplot=NA,vert=F){
   
   large_clusters = gsub(".txt",".tre",large_clusters)
   large_clusters = gsub("cluster","tree",large_clusters)
-  
   
   for (i in large_clusters){
     
@@ -85,18 +86,18 @@ plotTree <- function(clusterpath, subtype, year, mtdt,cltoplot=NA,vert=F){
   y$data$clustersave = y$data$cluster
   y$data$cluster = match(y$data$cluster,unique(y$data$cluster))
  
-  fig2 = y + aes(color=I(isroot),size=I(0.03))+ geom_tippoint(data=y$data[as.numeric(y$data$clustersave)>0 & (!(is.na(y$data$clustersave))) & y$data$clustersave!="UNCLUSTERED",],aes(fill=I(brewer.pal(100,"Paired")[as.numeric(clustersave)%%12+1]),size=I(size)*.7),pch=21,stroke=0.05) + theme_tree2() + 
+  fig2 = y + aes(color=I(desaturate(isroot,0.2)),size=I(0.03))+ geom_tippoint(data=y$data[as.numeric(y$data$clustersave)>0 & (!(is.na(y$data$clustersave))) & y$data$clustersave!="UNCLUSTERED",],
+                                                                              aes(fill=I(desaturate(brewer.pal(100,"Paired")[as.numeric(clustersave)%%12+1],0.2)),size=I(size)*1.2),pch=21,stroke=0.05) + theme_tree2() + 
     theme(axis.line=element_line(color='black',size = axissize),
           axis.text.x = element_text(size=7,color='black'),
-          #plot.title = element_text(size = 7,hjust=0.5)) + ggtitle(paste0(c("A/H3N2","A/H1N1pdm09","B/Victoria","B/Yamagata")[match(subtype,c("H3N2","H1N1","Vic","Yam"))],'\n',year,"/",year+1))
-          plot.title = element_text(size = 7,hjust=0.5)) + ggtitle(paste0(c("A/H3","A/H1pdm","B/Vic","B/Yam")[match(subtype,c("H3N2","H1N1","Vic","Yam"))],", ","'",substr(year,3,4),"/'",substr(year+1,3,4)))
+          plot.title = element_text(size = 7,hjust=0.5)) + ggtitle(paste0(c("A/H3N2","A/H1N1pdm09","B/Victoria","B/Yamagata")[match(subtype,c("H3N2","H1N1","Vic","Yam"))],", ","'",substr(year,3,4),"/'",substr(year+1,3,4)))
   
   
   idx = 1
   for (clustertoplot in cltoplot){
     mrca = getMRCA(t,mtdt[mtdt$Cluster==clustertoplot & mtdt$Strain%in%t$tip.label,]$Strain)
     cl = y$data$cluster[y$data$label%in%mtdt[mtdt$Cluster==clustertoplot & mtdt$Strain%in%t$tip.label,]$Strain][1]
-    fig2 = fig2 + geom_cladelab(node=mrca, label=idx, align=TRUE,  offset = .05, textcolor='black', barcolor=cl+10,fontsize=5/.pt)
+    fig2 = fig2 + geom_cladelab(node=mrca, label=idx, align=TRUE,  offset = .05, textcolor='black', barcolor=cl+10,fontsize=7/.pt)
     idx = idx + 1
   }
   
@@ -108,7 +109,7 @@ plotTree <- function(clusterpath, subtype, year, mtdt,cltoplot=NA,vert=F){
  
   fig2_plot = fig2_plot + xlim(c(xmin,xmax))
   fig2_plot = fig2_plot + scale_x_continuous(labels=c(paste0("Jul '",substr(year,3,4)),paste0("Jul '",substr(year+1,3,4))),breaks=max_x+year+1+c(-0.5,0.5)-maxdate,limits=c(.8,2)) + theme(axis.text.x = element_text(hjust=c(0.5,1)))
-  fig2_plot = fig2_plot + theme(axis.text.x = element_text(size=5),plot.title=element_text(size=5))+ theme(plot.title=element_text(vjust=.5,size=5))
+  fig2_plot = fig2_plot + theme(axis.text.x = element_text(size=7),plot.title=element_text(size=5))+ theme(plot.title=element_text(vjust=.5,size=5))
   
   return(fig2_plot+ theme(axis.text=element_text(size=5)) + ylim(c(1,max(fig2_plot$data$y)+1)))
 }
@@ -178,7 +179,7 @@ plotTree_vert <- function(clusterpath, subtype, year, mtdt, cltoplot=NA, lims, v
   t = drop.tip(t,mtdt[mtdt$Strain %in% t$tip.label & decimal_date(ymd(mtdt$Date)) > year + 1.4,]$Strain)
   
   tr = t
-  y =ggtree(t) #+ geom_cladelab(node=mrca, label="1", align=TRUE,  offset = .1, textcolor=519+10, barcolor=519+10,fontsize=5/.pt)#,layout="circular")
+  y =ggtree(t) 
   y$data$isroot = 'black'
   y$data$isroot[y$data$parent == min(y$data$parent)] = 'black'#white'
   y$data$isroot[y$data$parent == min(y$data$parent)] = 'black'#white'
@@ -195,37 +196,39 @@ plotTree_vert <- function(clusterpath, subtype, year, mtdt, cltoplot=NA, lims, v
   y$data$clustersave = y$data$cluster
   y$data$cluster = match(y$data$cluster,unique(y$data$cluster))
   
-  fig2 = y + coord_flip() + scale_x_reverse() + aes(color=I(isroot),size=I(0.1))+ geom_tippoint(aes(fill=I(cluster+10),size=I(size)*1.2),pch=21,stroke=0.1) + theme_tree2() + 
+  fig2 = y + coord_flip() + scale_x_reverse() + aes(color=I(isroot),size=I(0.1))+ geom_tippoint(aes(fill=I(desaturate(cluster+10,0.2)),size=I(size)*1.2),pch=21,stroke=0.1) + theme_tree2() + 
     theme(axis.line=element_line(color='black',size = axissize),
           axis.text.y = element_text(size=7,color='black'),
           plot.title = element_text(size = 7,hjust=0.5)) + ggtitle(paste0(c("A/H3N2","A/H1N1pdm09","B/Victoria","B/Yamagata")[match(subtype,c("H3N2","H1N1","Vic","Yam"))],'\n',year,"/",year+1))
-  #plot.title = element_text(size = 7,hjust=0.5)) + ggtitle(paste0(c("A/H3","A/H1pdm","B/Vic","B/Yam")[match(subtype,c("H3N2","H1N1","Vic","Yam"))],", ","'",substr(year,3,4),"/'",substr(year+1,3,4)))
-  
+
   idx = 1
   colors = c()
   for (clustertoplot in cltoplot){
     mrca = getMRCA(t,mtdt[mtdt$Cluster==clustertoplot & mtdt$Strain%in%t$tip.label,]$Strain)
     cl = y$data$cluster[y$data$label%in%mtdt[mtdt$Cluster==clustertoplot & mtdt$Strain%in%t$tip.label,]$Strain][1]
-    fig2 = fig2 + geom_cladelab(node=mrca, label=idx, align=TRUE,  offset = .05,offset.text=0.1, textcolor='black', barcolor=cl+10,fontsize=5/.pt)
+    fig2 = fig2 + geom_cladelab(node=mrca, label=idx, align=TRUE,  offset = lims[2]- max(y$data$x)-0.3,offset.text=lims[2]- max(y$data$x)-0.25, textcolor='black', barcolor=desaturate(cl+10,0.2),fontsize=7/.pt)
     colors = c(colors,cl+10)
     idx = idx + 1
   }
   
-  #ll = pl + xlim(0,2.1) + theme(plot.margin=unit(c(-3,-0.5,-3,-0.5),"cm")) 
-  fig2_plot = fig2 #+ xlim(0,2.1) #+ theme(plot.margin=unit(c(-3,-0.5,-3,-0.5),"cm")) 
-  xmax = max(fig2_plot$data$x)#floor(maxdate) + 0.3 - maxdate + max(fig2_plot$data$x)
+  fig2_plot = fig2
+  xmax = max(fig2_plot$data$x)
   xmin = xmax-1.5
   maxdate = max(mtdt[mtdt$Strain%in%fig2_plot$data$label,]$Date)
   max_x = max(fig2_plot$data$x[!(is.na(fig2_plot$data$label))])
   
   fig2_plot = fig2_plot  + scale_x_reverse(limits=(rev(lims)),breaks=(max_x+year+1+c(-1,-0.5,0,0.5)-maxdate),labels=(year+1+c(-1,-0.5,0,0.5))) +
-    theme(axis.line.y=element_line(size=0.2),axis.text.y=element_text(size=5),axis.ticks.y=element_line(size=0.2),axis.line.x = element_blank(),axis.ticks.x=element_blank(),axis.text.x = element_blank())
+    theme(axis.line.y=element_line(size=0.1),axis.text.y=element_text(size=7),
+          axis.ticks.y=element_line(size=0.1),axis.line.x = element_blank(),
+          axis.ticks.x=element_blank(),
+          axis.text.x = element_blank(),
+          axis.ticks.length=unit(3,'pt'))
   
   return(list(fig2_plot+ theme(axis.text=element_text(size=5),plot.title=element_blank()),colors))
 }
 
 
-plotCluster_true <- function(idx,onsetdiff,fctr,clusters){
+plotCluster_true <- function(idx,onsetdiff,fctr,clusters,lims=c(0,15)){
   
   df = cluster_df[cluster_df$Cluster==idx,]
   absent_states = state.name[!(state.name %in%df$State)]  
@@ -241,21 +244,18 @@ plotCluster_true <- function(idx,onsetdiff,fctr,clusters){
   df = df[!(is.na(df$Lat)),]
   df[,c("Lon","Lat")] = usmap_transform(df[,c("Lon","Lat")])[,c(3,4)]
   df$Percentage = as.numeric(df$Percentage)
-  df$Percentage[df$Percentage<0.05] = 0
-  
-  
+
   df$Totpct = NA
   for (state in unique(df$State)){
     
     df[df$State==state,]$Totpct = sum(cluster_df[cluster_df$State==state & cluster_df$Cluster%in%clusters,]$Percentage,na.rm=T)
   }
-  
-  lims = c(0,15)
-  c = plot_usmap(size=0.03,exclude=c('HI','AK'))  + geom_point(data = df[df$Totpct>0,], aes(x = Lon, y = Lat, size = sqrt(Totpct/20/pi)*fctr*2),bg='lightgrey', alpha = 0.2, pch=21,stroke=0.1)+
-    geom_point(data = df[df$Percentage>0,], aes(x = Lon, y = Lat, size = sqrt(Percentage/20/pi)*fctr*2, bg = as.numeric(Onset)), alpha = 1, pch=21,stroke=0.1)  +  
+
+  c = plot_usmap(size=0.05,exclude=c('HI','AK'))  + geom_point(data = df[df$Totpct>0,], aes(x = Lon, y = Lat, size = sqrt(Totpct/20/pi)*fctr*2),bg='lightgrey', alpha = 0.2, pch=21,stroke=0.1)+
+    geom_point(data = df[df$Percentage>0,], aes(x = Lon, y = Lat, size = sqrt(Percentage/20/pi)*fctr*2, bg = as.numeric(Onset)), alpha = .8, pch=21,stroke=0.1)  +  
     scale_fill_distiller(direction=-1,type='seq',palette='YlOrRd',name="Onset week",limits=lims,na.value='grey75') + scale_size_identity() 
   
-  c = c + theme(legend.position = 'none')#+ theme(plot.margin=margin) 
+  c = c + theme(legend.position = 'none')
   return(c)
 }
 
@@ -285,8 +285,6 @@ plotCluster_sim = function(prop,timing,onsetdiff,fctr,clusters){
   }
   
   df$Percentage = df$Percentage * df$Totpct
-  
-  
   df$Lon = NA
   df$Lat = NA
   for (stateidx in 1:50){
@@ -299,14 +297,13 @@ plotCluster_sim = function(prop,timing,onsetdiff,fctr,clusters){
   
   df[,c("Lon","Lat")] = usmap_transform(df[,c("Lon","Lat")])[,c(3,4)]
   
-  c = plot_usmap(size=0.03,exclude=c('HI','AK'))  + geom_point(data = df[df$Totpct>0,], aes(x = Lon, y = Lat, size = sqrt(Totpct/20/pi)*fctr*2),bg='lightgrey', alpha = 0.2, pch=21,stroke=0.1) +
-    geom_point(data = df[df$Percentage>0,], aes(x = Lon, y = Lat, size = sqrt(Percentage/20/pi)*fctr*2, bg = as.numeric(Onset)), alpha = 1, pch=21,stroke=0.1)  +  
+  c = plot_usmap(size=0.05,exclude=c('HI','AK'))  + geom_point(data = df[df$Totpct>0,], aes(x = Lon, y = Lat, size = sqrt(Totpct/20/pi)*fctr*2),bg='lightgrey', alpha = 0.2, pch=21,stroke=0.1) +
+    geom_point(data = df[df$Percentage>0,], aes(x = Lon, y = Lat, size = sqrt(Percentage/20/pi)*fctr*2, bg = as.numeric(Onset)), alpha = .8, pch=21,stroke=0.1)  +  
     scale_fill_distiller(direction=-1,type='seq',palette='YlOrRd',name="Onset week",limits=lims,na.value='grey75') + scale_size_identity() 
   
-  c = c+ theme(legend.position = 'none')# + theme(plot.margin=margin) 
+  c = c+ theme(legend.position = 'none')
   return(c)
 }
-
 
 
 addIsolationsToTree <- function(treeplot, season, subtype){
@@ -330,3 +327,4 @@ addIsolationsToTree <- function(treeplot, season, subtype){
   treeplot =  treeplot +geom_line(data=islts,aes(x=D,y=Val),lty=1,inherit.aes=F,col='black',lwd=0.1) +  geom_ribbon(data=islts,aes(x=D,ymin=min(treeplot$data$y),ymax=Val),inherit.aes=F,fill='lightgrey',alpha=0.3)
   return(treeplot)
 }
+

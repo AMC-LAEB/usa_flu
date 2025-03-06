@@ -210,10 +210,10 @@ getMobilityMatrix <- function(){
   states = c(state.name[-c(2,11)],"District Of Columbia")
   states_abb = c(state.abb[match(state.name[-c(2,11)],state.name)],"DC")
   
-  commuting_data = read.csv("~/Downloads/commuting_flows.csv",h=F)
+  commuting_data = read.csv("/Users/simondejong/usa/commuting_flows.csv",h=F)
   colnames(commuting_data) = c("residence.state.code","residence.county.code","residence.state","residence.county",
-                               "workplace.state.code","workplace.county.code","workplace.state","workplace.county",
-                               "commuting.flow","commuting.flow.moe")
+                               "workplace.state.code","workaplace.county.code","workplace.state","workplace.county",
+                               "commuting.flow","commutin.flow.moe")
   
   commuting_data = commuting_data[,c(3,7,9)]
   colnames(commuting_data) = c("ORIG","DEST","COUNT")
@@ -232,7 +232,7 @@ getMobilityMatrix <- function(){
   }
   commuting_data = commuting_data[match(states,colnames(commuting_data)),match(states,colnames(commuting_data))]
   
-  airtravel_data = read.csv("~/Downloads/T_T100D_MARKET_ALL_CARRIER-2.csv")
+  airtravel_data = read.csv("/Users/simondejong/usa/T_T100D_MARKET_ALL_CARRIER-2.csv")
   airtravel_data = airtravel_data[airtravel_data$ORIGIN_STATE_ABR %in% states_abb & airtravel_data$DEST_STATE_ABR %in% states_abb,]
   airtravel_data = ddply(airtravel_data,.(ORIGIN_STATE_ABR,DEST_STATE_ABR),summarise,N = sum(PASSENGERS))
   airtravel_data = acast(airtravel_data,ORIGIN_STATE_ABR~DEST_STATE_ABR,value.var="N")
@@ -284,11 +284,17 @@ getMobilityMatrix <- function(){
   d_airtravel = d
   d_airtravel[adjacency_mat==T] = 0
   
-  return(list(d_airtravel,d_commuting,d2_airtravel,d2_commuting,adjacency_mat))
+  
+  distance = read.csv("/Users/simondejong/usa/centroid_dists.csv",h=F)
+  distance = distance[-c(2,11),-c(2,11)]
+  distance = rbind(distance,NA)
+  distance = cbind(distance,NA)
+  
+  return(list(d_airtravel,d_commuting,d2_airtravel,d2_commuting,adjacency_mat,distance))
 }
 
 
-getPcts <- function(sim){
+getPcts <- function(sim, seqcounts){
   states = c(state.name[-c(2,11)],"District Of Columbia")
   ncluster = dim(sim[[1]])[1]/49
   nstate = 49
@@ -301,6 +307,8 @@ getPcts <- function(sim){
   sim1 = simout1
   all_pct = matrix(0,length(states),ncluster)
   all_ons = matrix(0,length(states),ncluster)
+
+  
   rs = rowSums(simout1)
   for (i in 1:ncluster){
     out_inc = simout1[,,i]
@@ -309,7 +317,12 @@ getPcts <- function(sim){
     all_pct[,i] = pct
     all_ons[,i] = ons
   }
-  return(list(all_pct,all_ons))
+  all_pct[all_pct<0] = 0
+  all_pct[all_pct>1] = 1
+  ll = 0
+  ll = sum(sapply(1:(nrow(all_pct)-1),function(x)dmultinom(seqcounts[x,],prob=all_pct[x,],log=T)))
+  
+  return(list(all_pct,all_ons,ll))
 }
 
 

@@ -29,7 +29,9 @@ allJumps <- function(folder, hhs=F){
     
     checkpath = file.exists(outpath)
     
-    system(paste0("../collect_times ", burnin," < ",path," > ",outpath))
+    if (!(checkpath)){
+      system(paste0("../collect_times ", burnin," < ",path," > ",outpath))
+    }
     
     f = read.csv(outpath,sep='\t')
     
@@ -100,9 +102,9 @@ mlt$to_hhs = hhsreg[match(mlt$state,states)]
 mlt$st = c(state.abb[-c(2,11)],"DC")[match(mlt$state,states)]
 ggplot(mlt,aes(x=st,y=prop)) + geom_point(aes(fill=factor(to_hhs)),pch=21,stroke=0.1,cex=2) + 
   scale_fill_brewer(palette='Set3',name="HHS region") + facet_wrap(.~factor(source_hhs),scales='free',ncol=2,nrow=5) +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + theme(axis.text=element_text(size=5)) + xlab("State") + 
-  ylab("Proportion") + theme(axis.title=element_text(size=6))
-ggsave("Figure_SS_subsamp.pdf",width=180,units="mm",height=200)
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + theme(axis.text=element_text(size=7)) + xlab("State") + 
+  ylab("Proportion") + theme(axis.title=element_text(size=6)) + thm + theme(legend.position='top')
+ggsave("SuppFig_SS_subsamp.pdf",width=230,units="mm",height=220)
 
 mlt = melt(state_props)
 colnames(mlt) = c("source_hhs","state","prop")
@@ -110,10 +112,9 @@ mlt$to_hhs = hhsreg[match(mlt$state,states)]
 mlt$st = c(state.abb[-c(2,11)],"DC")[match(mlt$state,states)]
 ggplot(mlt,aes(x=st,y=prop)) + geom_point(aes(fill=factor(to_hhs)),pch=21,stroke=0.1,cex=2) + 
   scale_fill_brewer(palette='Set3',name="HHS region") + facet_wrap(.~factor(source_hhs),scales='free',ncol=2,nrow=5) +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + theme(axis.text=element_text(size=5)) + xlab("State") + 
-  ylab("Proportion") + theme(axis.title=element_text(size=6))
-ggsave("Figure_SS_nonsubsamp.pdf",width=180,units="mm",height=200)
-
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + theme(axis.text=element_text(size=7)) + xlab("State") + 
+  ylab("Proportion") + theme(axis.title=element_text(size=6)) + thm + theme(legend.position='top')
+ggsave("SuppFig_SS_nonsubsamp.pdf",width=230,units="mm",height=220)
 
 adjacency_mat = mob[[5]]
 
