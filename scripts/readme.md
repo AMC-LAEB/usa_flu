@@ -11,5 +11,3 @@
 **sourceSink_USA.R** contains code to analyse source-sink dynamics given BEAST output
 
 **stateLineageSimilarity.R** is used to perform analyses of lineage spatial structure.
-
-The folder **beast_xml** contains scripts used to generate BEAST xml files.
